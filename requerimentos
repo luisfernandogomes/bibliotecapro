@@ -1,0 +1,23 @@
+Situação-Problema – Aplicativo para Sistema de Biblioteca
+
+Desafio Proposto
+Desenvolver um aplicativo gráfico que consuma a API existente e ofereça uma
+interface amigável para bibliotecários e atendentes.
+O aplicativo deve ser desenvolvido com a biblioteca Flet, utilizando chamadas
+HTTP (GET, POST, PUT, DELETE) para interagir com a API.
+
+Entidades da API (já existentes)
+1. Livros: título, autor, ISBN, resumo
+2. Usuários: nome, CPF, endereço
+3. Empréstimos: data do empréstimo, data de devolução prevista, livro,
+usuário
+
+Funcionalidades do Aplicativo
+O aplicativo deve permitir:
+1. Consultar Livros, Usuários e Empréstimos✅
+2. Cadastrar Livros e Usuários✅
+3. Atualizar informações de livros e usuários✅
+4. Listar Livros, Usuários e Empréstimos✅
+5. Realizar Empréstimos, selecionando um livro e um usuário✅❌
+6. Ver histórico de Empréstimos por Usuário❌
+7. Exibir mensagens de erro ou sucesso com base nas respostas da API✅
