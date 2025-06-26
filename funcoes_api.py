@@ -14,6 +14,40 @@ def get_usuarios():
     else:
         dados = response.json()
         return dados
+
+def post_user(nome, email,cargo,senha):
+    url = "http://10.135.232.36:5000/cadastrar_users"
+    user = {
+        'nome': nome,
+        'email': email,
+        'cargo': cargo,
+        'senha': senha
+    }
+    response = requests.post(url, json=user)
+    if response.status_code == 200:
+        dados = response.json()
+        return dados
+    else:
+        dados = response.json()
+        return dados
+# post_user('Luis','luis@gmail.com','gerente','luis123')
+def login(email, senha):
+    url = "http://10.135.232.36:5000/login"
+    logar = {
+        'email': email,
+        'senha': senha
+    }
+    response = requests.post(url, json=logar)
+    if response.status_code == 200:
+        dados = response.json()
+        print(dados)
+        return dados
+    else:
+        dados = response.json()
+        print(dados)
+        return dados
+#    *****************************************************************************************
+# login('luis@gmail.com','luis123')
 def get_emprestimos():
     url = "http://10.135.232.36:5000/consultar_emprestimos"
 
@@ -42,7 +76,6 @@ def post_livro(titulo, autor, resumo, isbn):
              "isbn": isbn}
     response = requests.post(url, json=livro)
     if response.status_code == 200:
-
         dados_post = response.json()
         return dados_post
     else:
@@ -72,7 +105,10 @@ def cadastrar_emprestimos(id_usuario,isbn):
         dados_post = response.json()
         return dados_post
     else:
-        return response.json()
+        try:
+            return response.json()
+        except IndexError as e:
+            print(e)
 def get_emprestimos_por_usuario(id):
     url = f"http://10.135.232.36:5000/get_emprestimos_por_usuario/{id}"
     response = requests.get(url)
@@ -81,7 +117,7 @@ def get_emprestimos_por_usuario(id):
         return dados['sucesso']
     else:
         return response.json()
-get_emprestimos_por_usuario(1)
+# get_emprestimos_por_usuario(1)
 
 
 def editar_emprestimo(ISBN,id_usuario):

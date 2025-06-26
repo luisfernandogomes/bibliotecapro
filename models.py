@@ -1,16 +1,47 @@
 from sqlalchemy import create_engine, Column, Integer, ForeignKey, String, Boolean, DateTime, Float, Date, func
-
+from sqlalchemy.exc import SQLAlchemyError
 # em baixo importamos session(gerenciar)  e sessiomaker(construir)
 from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base, relationship
 from datetime import date
 from dateutil.relativedelta import relativedelta
-
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 engine = create_engine('sqlite:///Biblioteca')
-db_session = scoped_session(sessionmaker(bind=engine))
+# db_session = scoped_session(sessionmaker(bind=engine)) padrao antigo
+session_local = sessionmaker(bind=engine)
 Base = declarative_base()
-Base.query = db_session.query_property()
+#Base.query = db_session.query_property()
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    senha_hash = Column(String, nullable=False)
+    cargo = Column(String, nullable=False)
+
+    def set_senha_hash(self, senha):
+        self.senha_hash = generate_password_hash(senha)
+
+    def check_password(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+    def save(self, db_session):
+        try:
+            db_session.add(self)
+            db_session.commit()
+        except SQLAlchemyError:
+            db_session.rollback()
+            raise
+
+    def serialize(self):
+        dados = {
+            'id': self.id,
+            'nome': self.nome,
+            'email': self.email,
+            'cargo': self.cargo
+        }
+        return dados
 
 class Livros(Base):
     __tablename__ = 'livros'
@@ -24,10 +55,10 @@ class Livros(Base):
     def __repr__(self):
         return '<Livro {},{},{},{},{}>'.format(self.id_livro,self.ISBN, self.titulo, self.autor, self.resumo, self.status)
 
-    def save(self):
+    def save(self, db_session):
         db_session.add(self)
         db_session.commit()
-    def delete(self):
+    def delete(self,db_session):
         db_session.delete(self)
         db_session.commit()
     def get_livro(self):
@@ -50,10 +81,10 @@ class Usuarios(Base):
     def __repr__(self):
         return '<usuario {},{},{},{}>'.format(self.id, self.nome, self.CPF, self.endereco)
 
-    def save(self):
+    def save(self,db_session):
         db_session.add(self)
         db_session.commit()
-    def delete(self):
+    def delete(self,db_session):
         db_session.delete(self)
         db_session.commit()
     def get_usuario(self):
@@ -77,10 +108,10 @@ class Emprestimos(Base):
 
     def __repr__(self):
         return '<emprestimo {},{},{},{},{},{}'.format(self.id_emprestimo,self.data_emprestimo, self.data_de_devolucao, self.ISBN_livro, self.id_usuario,self.status)
-    def save(self):
+    def save(self,db_session):
         db_session.add(self)
         db_session.commit()
-    def delete(self):
+    def delete(self,db_session):
         db_session.delete(self)
         db_session.commit()
 

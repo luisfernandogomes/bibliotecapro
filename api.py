@@ -3,30 +3,122 @@ from flask_pydantic_spec import FlaskPydanticSpec
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import selectinload
-
-from models import db_session, Livros, Emprestimos, Usuarios
+from functools import wraps
+from models import *
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, desc
-
+from flask_jwt_extended import get_jwt_identity, JWTManager, create_access_token, jwt_required
 app = Flask(__name__)
 spec = FlaskPydanticSpec('Flask',
                          title='Flask API',
                          version='1.0.0')
 spec.register(app)
-app.secret_key = 'chave_secreta'
+app.config['JWT_SECRET_KEY'] = 'senha'
+jwt = JWTManager(app)
 
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        db_session = session_local()
+        current_user = get_jwt_identity()
+        print(current_user)
+
+        try:
+            user = db_session.execute(select(User).where(User.email == current_user)).scalar()
+            print(user)
+            if user and user.papel == "gerente":
+                return fn(*args, **kwargs)
+
+            return jsonify({'error':'usuario não possui permissão de administrador'})
+        finally:
+            db_session.close()
+    return wrapper
 
 @app.route('/')
 def index():
     return redirect('/consultar_livros')
 
 
+@app.route('/cadastrar_users', methods=['POST'])
+
+def cadastrar_user():
+    db_session = session_local()
+
+    dados = request.get_json()
+    nome = dados['nome']
+    email = dados['email']
+    cargo = dados.get('cargo', 'usuario')
+    senha = dados['senha']
+
+    if not nome or not email or not senha:
+        return jsonify({"msg": "Nome de usuário e senha são obrigatórios"}), 400
+    try:
+        # Verificar se o usuário já existe
+        user_check = select(User).where(User.email == email)
+        usuario_existente = db_session.execute(user_check).scalar()
+
+        if usuario_existente:
+            return jsonify({"msg": "Usuário já existe"}), 400
+
+        novo_usuario = User(nome=nome, email=email, cargo=cargo)
+        novo_usuario.set_senha_hash(senha)
+        novo_usuario.save(db_session)
+
+        user_id = novo_usuario.id
+        return jsonify({"sucesso": user_id}), 201
+    except Exception as e:
+        return jsonify({"error": {str(e)}}), 500
+    finally:
+        db_session.close()
+
+@app.route('/login', methods=['POST'])
+def login():
+    db_session = session_local()
+    dados = request.get_json()
+    email = dados['email']
+    senha = dados['senha']
+    try:
+        user = db_session.execute(select(User).where(User.email == email)).scalar()
+        if user and user.check_password(senha):
+            access_token = create_access_token(identity=email)
+            return jsonify(access_token=access_token)
+        return jsonify({'error': 'Senha incorreto'})
+    finally:
+        db_session.close()
+
 @app.route('/consultar_usuarios', methods=['GET'])
 def consultar_usuarios():
+    """
+    Retorna uma lista de todos os usuários cadastrados.
+
+    Endpoint:
+    /consultar_usuarios
+
+    Respostas (JSON):
+    ```json
+    {
+        "usuarios": [
+            {
+                "id_usuario": 1,
+                "nome": "João Silva",
+                "CPF": "12312312312",
+                "endereco": "Rua"
+            }
+        ]
+    }
+    ```
+    Erros possíveis (JSON):
+    ```json
+    {
+        "erro": "Mensagem de erro"
+    }
+    ```
+    """
+    db_session = session_local()
     try:
         usuarios = db_session.execute(select(Usuarios)).scalars().all()
 
@@ -40,6 +132,34 @@ def consultar_usuarios():
 
 @app.route('/consultar_livros')
 def consultar_livros():
+    """
+        Retorna uma lista de todos os livros cadastrados.
+
+        Endpoint:
+        /livros
+
+        Respostas (JSON):
+        ```json
+        {
+            "livros": [
+                {
+                    "id_livro": 1,
+                    "titulo": "livro1",
+                    "autor": " lucianp",
+                    "ISBN": "9788533302273",
+                    "resumo": "resumo1"
+                }
+            ]
+        }
+        ```
+        Erros possíveis (JSON):
+        ```json
+        {
+            "erro": "Mensagem de erro"
+        }
+        ```
+        """
+    db_session = session_local()
     try:
         lista_livros = select(Livros)
         lista_livros = db_session.execute(lista_livros).scalars().all()
@@ -52,6 +172,33 @@ def consultar_livros():
         return jsonify({'error': str(e)})
 @app.route('/consultar_emprestimos')
 def consultar_emprestimos():
+    """
+     Retorna uma lista de todos os empréstimos registrados
+
+     Endpoint:
+     /consultar_emprestimos
+
+     Respostas (JSON):
+     ```json
+     {
+         "emprestimos": [
+             {
+                 "id_emprestimo": 1,
+                 "id_usuario": 1,
+                 "id_livro": 1,
+                 "data": 03/02/2024
+             }
+         ]
+     }
+     ```
+     Erros possíveis (JSON):
+     ```json
+     {
+         "erro": "Mensagem de erro"
+     }
+     ```
+     """
+    db_session = session_local()
     try:
         emprestimos = db_session.execute(
             select(Emprestimos)
@@ -87,6 +234,43 @@ def consultar_emprestimos():
 
 @app.route('/get_emprestimos_por_usuario/<id>', methods=['GET'])
 def get_emprestimos(id):
+    """
+        Retorna uma lista do todos os empréstimos realizados por usuario
+
+        Endpoint:
+        /get_emprestimos_por_usuario/<id>
+
+        Respostas (JSON):
+        ```json
+        {
+            "emprestimos": [
+                {
+                'id_emprestimo': emp.id_emprestimo,
+                'data_emprestimo': emp.data_emprestimo,
+                'data_de_devolucao': emp.data_de_devolucao,
+
+                    'usuario': {
+                        'id': emp.usuario.id,
+                        'nome': emp.usuario.nome,
+                        'CPF': emp.usuario.CPF,
+                        'endereco': emp.usuario.endereco
+                    },
+                    'livro': {
+                        'ISBN': emp.livro.ISBN,
+                        'titulo': emp.livro.titulo,
+                        'status': emp.livro.status
+                }
+            ]
+        }
+        ```
+        Erros possíveis (JSON):
+        ```json
+        {
+            "erro": "Mensagem de erro"
+        }
+        ```
+        """
+    db_session = session_local()
     try:
 
         emprestimos = db_session.execute(
@@ -120,7 +304,42 @@ def get_emprestimos(id):
     except IntegrityError as e:
         return jsonify({'error': str(e)})
 @app.route('/cadastrar_livro', methods=['POST'])
+@jwt_required
+
 def cadastrar_livro():
+    """
+        Cadastra um novo livro no sistema
+
+        Endpoint:
+        /cadastrar_livro
+
+        Corpo da Requisição (JSON):
+        ```json
+        {
+            "titulo": "Nome do Livro",
+            "autor": "Nome do Autor",
+            "isbn": "11111111111",
+            "resumo": "Resumo do livro"
+        }
+        ```
+
+        Respostas (JSON):
+        ```json
+        {
+            "id_livro": 1,
+            "titulo": "Nome do Livro",
+            "autor": "Nome do Autor",
+            "ISBN": "11111111111",
+            "resumo": "Resumo do livro"
+        }
+
+        Erros possíveis (JSON):
+        ```json
+        {
+            "erro": "Campos não podem ser vazios"
+        }
+        """
+    db_session = session_local()
     if request.method == 'POST':
         dados = request.get_json()
         titulo = dados['titulo']
@@ -165,6 +384,30 @@ def cadastrar_livro():
 
 @app.route('/cadastrar_usuario', methods=['POST'])
 def cadastrar_usuario():
+    """
+        Cadastra um novo usuário no sistema.
+
+        Endpoint:
+        /cadastrar_usuario
+
+        Corpo da Requisição (JSON):
+        ```json
+        {
+            "nome": "Mariaaaaaaaaaa",
+            "cpf": "40570214858",
+            "endereco": "Avenida 333"
+        }
+        ```
+        Erros possíveis (JSON):
+        ```json
+        {
+            "status": false,
+            "erro": "Campos não podem ser vazios"
+        }
+        ```
+        Status: 400 Bad Request
+        """
+    db_session = session_local()
     if request.method == 'POST':
         dados = request.get_json()
         nome = dados['nome']
@@ -202,11 +445,66 @@ def cadastrar_usuario():
 
 @app.route('/cadastrar_emprestimo', methods=['POST'])
 def cadastrar_emprestimo():
+    """
+        Realiza um empréstimo de livro
+
+        Endpoint:
+        /cadastrar_emprestimo
+
+        Corpo da Requisição (JSON):
+        ```json
+        {
+            "id_usuario": 1,
+            "id_livro": 2,
+            "data_emprestimo": "YYYY-MM-DD",
+            "data_devolucao": "YYYY-MM-DD"
+        }
+        ```
+
+        Respostas (JSON):
+        ```json
+        {
+            "id_emprestimo": 1,
+            "id_usuario": 1,
+            "id_livro": 2,
+            "data_emprestimo": "YYYY-MM-DD",
+            "data_devolucao": "YYYY-MM-DD"
+        }
+        ```
+        Status: 201 Created
+
+        Erros possíveis (JSON):
+        ```json
+        {
+            "erro": "Campos obrigatórios estão ausentes"
+        }
+        ```
+        Status: 400 Bad Request
+        ```json
+        {
+            "erro": "Usuário não encontrado"
+        }
+        ```
+        Status: 404 Not Found
+        ```json
+        {
+            "erro": "Livro não encontrado"
+        }
+        ```
+        Status: 404 Not Found
+        ```json
+        {
+            "erro": "Mensagem de erro"
+        }
+        ```
+        Status: 400 Bad Request
+    """
+    db_session = session_local()
     try:
         data_emprestimo = date.today()
 
         data_de_devolucao = data_emprestimo + relativedelta(weeks=5)
-
+        data_emprestimo.strftime('%d/%m/%Y')
         dados = request.get_json()
         isbn = dados['isbn']
         id_usuario = dados['id_usuario']
@@ -268,6 +566,49 @@ def cadastrar_emprestimo():
 
 @app.route('/atualizar_usuario/<id>', methods=['PUT'])
 def editar_usuario(id):
+    """
+           Atualiza os dados de um usuário existente
+
+           Endpoint:
+           atualizar_usuario/<id>
+
+
+           Corpo da Requisição (JSON):
+           ```json
+           {
+               "nome": "Novo Nome do Usuário",
+               "cpf": "111.222.333-44",
+               "endereco": "Nova Rua, 789"
+           }
+           ```
+           (Envie apenas os campos que deseja atualizar)
+
+           Respostas (JSON):
+           ```json
+           {
+               "id_usuario": 1,
+               "nome": "Novo Nome do Usuário",
+               "CPF": "111.222.333-44",
+               "endereco": "Nova Rua"
+           }
+           ```
+           Status: 200 OK
+
+           Erros possíveis (JSON):
+           ```json
+           {
+               "erro": "Usuário não encontrado"
+           }
+           ```
+           Status: 404 Not Found
+           ```json
+           {
+               "erro": "Mensagem de erro"
+           }
+           ```
+           Status: 400 Bad Request
+       """
+    db_session = session_local()
     if request.method == 'PUT':
         try:
             id = int(id)
@@ -297,6 +638,50 @@ def editar_usuario(id):
 
 @app.route('/atualizar_livro/<id>', methods=['PUT'])
 def atualizar_livro(id):
+    """
+               Atualiza os dados de um usuário existente
+
+               Endpoint:
+               atualizar_usuario/<id>
+
+
+               Corpo da Requisição (JSON):
+               ```json
+               {
+                     "titulo": "Nome do Livro",
+                    "autor": "Nome do Autor",
+                    "isbn": "11111111111",
+                    "resumo": "Resumo do livro"
+               }
+               ```
+               (Envie apenas os campos que deseja atualizar)
+
+               Respostas (JSON):
+               ```json
+               {
+                    "titulo": "Nome do Livro",
+                    "autor": "Nome do Autor",
+                    "isbn": "11111111111",
+                    "resumo": "Resumo do livro"
+                }
+               ```
+               Status: 200 OK
+
+               Erros possíveis (JSON):
+               ```json
+               {
+                   "erro": "Usuário não encontrado"
+               }
+               ```
+               Status: 404 Not Found
+               ```json
+               {
+                   "erro": "Mensagem de erro"
+               }
+               ```
+               Status: 400 Bad Request
+           """
+    db_session = session_local()
     try:
         livro = select(Livros)
         livro = db_session.execute(livro.filter_by(id_livro=id)).scalar()
@@ -328,6 +713,43 @@ def atualizar_livro(id):
 
 @app.route('/emprestimos_por_usuario/<id_usuario>', methods=['GET'])
 def emprestimos_por_usuario(id_usuario):
+    """
+            Lista dos empréstimos realizados por usuario
+
+            Endpoint:
+            /emprestimos_por_usuario/<id_usuario>
+
+            Respostas (JSON):
+            ```json
+            {
+                "emprestimos": [
+                    {
+                    'id_emprestimo': emp.id_emprestimo,
+                    'data_emprestimo': emp.data_emprestimo,
+                    'data_de_devolucao': emp.data_de_devolucao,
+
+                        'usuario': {
+                            'id': emp.usuario.id,
+                            'nome': emp.usuario.nome,
+                            'CPF': emp.usuario.CPF,
+                            'endereco': emp.usuario.endereco
+                        },
+                        'livro': {
+                            'ISBN': emp.livro.ISBN,
+                            'titulo': emp.livro.titulo,
+                            'status': emp.livro.status
+                    }
+                ]
+            }
+            ```
+            Erros possíveis (JSON):
+            ```json
+            {
+                "erro": "Mensagem de erro"
+            }
+            ```
+            """
+    db_session = session_local()
     try:
         emprestimos = db_session.execute(select(Emprestimos).filter_by(id_usuario=id_usuario)).scalars()
         if not emprestimos:
@@ -344,6 +766,7 @@ def emprestimos_por_usuario(id_usuario):
 
 @app.route('/editar_emprestimo/<ISBN>', methods=['PUT'])
 def editar_emprestimo(ISBN):
+    db_session = session_local()
     if request.method == 'PUT':
         try:
             ISBN = int(ISBN)
@@ -366,6 +789,7 @@ def editar_emprestimo(ISBN):
 
 @app.route('/devolver_livro', methods=['PUT'])
 def devolver():
+    db_session = session_local()
     try:
         dados = request.get_json()
         id_usuario = dados['id_usuario']

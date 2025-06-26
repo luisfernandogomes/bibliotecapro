@@ -14,6 +14,16 @@ def main(page: ft.Page):
     page.window.width = 375
     page.window.height = 667
 
+    token = None
+
+    def get_token():
+        global token
+        return token
+
+    def set_token(new_token):
+        global token
+        token = new_token
+
     # def lista_em_detalhes(e):
     #     lv_Descricao.controls.clear()
     #     for livro in lista:
@@ -136,7 +146,8 @@ def main(page: ft.Page):
         bgcolor=Colors.RED,
         duration=2000,
     )
-
+    input_email = TextField(label='Email')
+    input_password = TextField(label='coloque sua senha')
 
     def editar_livro(book):
         campo_id_livro.value = book['id do livro']
@@ -318,6 +329,26 @@ def main(page: ft.Page):
         campo_cpf.value = user['CPF']
         campo_endereco.value = user['endereco']
         page.go('/editar_usuario')
+    token = Text('')
+    def func_logar(e):
+        if input_email.value == '' or input_password.value == '':
+            page.overlay.append(msg_errror_vazios)
+            msg_errror_vazios.open = True
+            return page.update()
+        dados = login(input_email.value,input_password.value)
+        if 'error' in dados:
+            abu = ft.Text(value=dados['error'])
+            snack_personalizado = ft.SnackBar(content=abu, bgcolor=Colors.RED, duration=2000)
+            page.overlay.append(snack_personalizado)
+            snack_personalizado.open = True
+            return page.update()
+        else:
+            token.value = dados
+            page.overlay.append(msg_sucesso)
+            msg_sucesso.open = True
+            page.update()
+            page.go('/')
+
 
     def salvar_livro(e):
         if (campo_book_titulo.value == '' or campo_book_autor.value == '' or campo_book_resumo.value == ''
@@ -370,6 +401,19 @@ def main(page: ft.Page):
             )
         )
 
+        if page.route == "/login" or page.route == "biblioteca":
+            page.views.append(
+                View(
+                    "/login",
+                    [
+                        AppBar(title=Text("Logar"), bgcolor='#153147', actions=[perfil], leading=logo,
+                               center_title=True, color='#ffe6d9'),
+                        input_email,
+                        input_password,
+                        ft.Button('logar',bgcolor=Colors.BLUE,on_click=lambda _: func_logar(e))
+                    ]
+                )
+            )
 
         if page.route == "/biblioteca" or page.route == "/detalhes":
             mostrar_livros(e)
@@ -378,7 +422,8 @@ def main(page: ft.Page):
                 View(
                     "/biblioteca",
                     [
-                        AppBar(title=Text("Catalogo de livros"), bgcolor='#153147',actions=[perfil],leading=logo,center_title=True,color='#ffe6d9'),
+                        AppBar(title=Text("Catalogo de livros"), bgcolor='#153147',actions=[perfil],leading=logo,
+                               center_title=True,color='#ffe6d9'),
                         lv_Descricao,
 
 
@@ -803,6 +848,7 @@ def main(page: ft.Page):
                             ft.PopupMenuItem(text='Cadastrar_usuario', on_click=lambda _: page.go('/cadastrar_usuario')),
                             ft.PopupMenuItem(text='Exibir usuarios', on_click=lambda _: page.go('/usuarios')),
                             ft.PopupMenuItem(text='Exibir emprestimo', on_click=lambda _: page.go('/emprestimos')),
+                            ft.PopupMenuItem(text='login', on_click=lambda _: page.go('/login')),
                         ],bgcolor="#0000000"
                     )
     menubar = ft.MenuBar(
