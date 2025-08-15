@@ -355,14 +355,17 @@ def main(page: ft.Page):
                 or campo_book_ISBN.value == ''):
             page.overlay.append(msg_errror_vazios)
             msg_errror_vazios.open = True
-            return page.update()
+            page.update()
+            return
+
         dados = post_livro(campo_book_titulo.value,campo_book_autor.value,campo_book_resumo.value,campo_book_ISBN.value)
+        print(dados)
         if 'error' in dados:
             abu = ft.Text(value=dados['error'])
             snack_personalizado = ft.SnackBar(content=abu, bgcolor=Colors.RED, duration=2000)
             page.overlay.append(snack_personalizado)
             snack_personalizado.open = True
-            return page.update()
+            page.update()
         else:
             page.overlay.append(msg_sucesso)
             msg_sucesso.open = True

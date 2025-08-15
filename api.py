@@ -26,7 +26,6 @@ def admin_required(fn):
         db_session = session_local()
         current_user = get_jwt_identity()
         print(current_user)
-
         try:
             user = db_session.execute(select(User).where(User.email == current_user)).scalar()
             print(user)
@@ -304,7 +303,7 @@ def get_emprestimos(id):
     except IntegrityError as e:
         return jsonify({'error': str(e)})
 @app.route('/cadastrar_livro', methods=['POST'])
-@jwt_required
+
 
 def cadastrar_livro():
     """
@@ -349,15 +348,15 @@ def cadastrar_livro():
         isbn_existente = select(Livros)
         isbn_existente = db_session.execute(isbn_existente.filter_by(ISBN=isbn)).first()
         if isbn_existente:
-            return jsonify({'error': 'isbn_existente'})
+            return jsonify({'error': 'isbn_existente'}), 400
         if not titulo:
-            return jsonify({"error": 'campo titulo vazio'}, 400)
+            return jsonify({"error": 'campo titulo vazio'}), 400
         if not autor:
-            return jsonify({"error": 'campo autor vazio'}, 400)
+            return jsonify({"error": 'campo autor vazio'}), 400
         if not resumo:
-            return jsonify({"error": 'campo resumo vazio'}, 400)
+            return jsonify({"error": 'campo resumo vazio'}), 400
         if not isbn:
-            return jsonify({"error": 'campo ISBN vazio'}, 400)
+            return jsonify({"error": 'campo ISBN vazio'}), 400
         else:
             try:
                 isbn = int(isbn)
@@ -366,7 +365,7 @@ def cadastrar_livro():
                                        resumo=resumo,
                                        ISBN=isbn,
                                        status=True)
-                livro_salvado.save()
+                livro_salvado.save(db_session)
                 if livro_salvado.status:
                     status_emprestimo = 'Está disponivel para emprestimo'
                 else:
@@ -378,7 +377,7 @@ def cadastrar_livro():
                     'status': status_emprestimo,
                     'ISBN': livro_salvado.ISBN
                 })
-            except IntegrityError as e:
+            except Exception as e:
                 return jsonify({'error': str(e)}), 500
 
 
@@ -434,7 +433,7 @@ def cadastrar_usuario():
                 usuario_salvado = Usuarios(nome=nome,
                                            CPF=cpf,
                                            endereco=endereco)
-                usuario_salvado.save()
+                usuario_salvado.save(db_session)
                 return jsonify({
                     'nome': usuario_salvado.nome,
                     'cpf': usuario_salvado.CPF,
@@ -545,7 +544,7 @@ def cadastrar_emprestimo():
             id_usuario=id_usuario,
             status='pendente'
         )
-        emprestimo.save()
+        emprestimo.save(db_session)
 
         livro.status = False
         livro.save()
